@@ -1,0 +1,4 @@
+#ifndef __H_CONST_MEMBER_FUNCTION_
+#define __H_CONST_MEMBER_FUNCTION_
+#endif
+
