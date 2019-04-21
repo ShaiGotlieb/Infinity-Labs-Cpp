@@ -30,7 +30,7 @@ struct MinibusFuncPtr
 
 struct TaxiFuncPtr
 {
-    void (*Dtor)(struct Taxi const * this);   
+    void (*Dtor)(struct Taxi * const this);   
     void (*display)(struct Taxi * const this); 
 };
 
@@ -73,7 +73,7 @@ static void print_count();
 void print_info_recieve_PublicTransport(struct PublicTransport *a);
 void print_info_recieve_void();
 void print_info_recieve_Minibus(struct Minibus *m);
-struct PublicTransport print_info_recieve_int_ret_PublicTransport(int i);
+void print_info_recieve_int_ret_PublicTransport(struct PublicTransport *this, int i);
 void display(struct PublicTransport * const this);
 void MinibusCCtor(struct Minibus * const this, struct Minibus * const other); 
 void MinibusCtor(struct Minibus * const this);
@@ -86,7 +86,7 @@ void PublicTransportDtor(struct PublicTransport * const this);
 void TaxiCCtor(struct Taxi * const this, struct Taxi *other);
 void TaxiCtor(struct Taxi * const this);
 void TaxiDisplay(struct Taxi * const this);
-void TaxiDtor(struct Taxi const * this);
+void TaxiDtor(struct Taxi * const this);
 void SpecialTaxiCtor(struct SpecialTaxi * const this);
 void SpecialTaxiCCtor(struct SpecialTaxi * const this, struct SpecialTaxi * const other);
 void SpecialTaxiDtor(struct SpecialTaxi * const this);
@@ -187,6 +187,7 @@ void MinibusCCtor(struct Minibus * const this, struct Minibus * const other)
 /* DTOR */
 void MinibusDtor(struct Minibus * const this)
 {
+    this->funcs = &publicTransport_v_table;
     printf("Minibus::Dtor()\n");
     PublicTransportDtor((struct PublicTransport *)this);
 }
@@ -222,8 +223,9 @@ void TaxiCCtor(struct Taxi * const this, struct Taxi *other)
 }
 
 /* DTOR */
-void TaxiDtor(struct Taxi const * this)
+void TaxiDtor(struct Taxi * const this)
 {
+    this->funcs = &publicTransport_v_table;
     printf("Taxi::Dtor()\n");
     PublicTransportDtor((struct PublicTransport*)this);
 }
@@ -240,7 +242,7 @@ void TaxiDisplay(struct Taxi * const this)
 void SpecialTaxiCtor(struct SpecialTaxi * const this)
 {
     TaxiCtor((struct Taxi*)this);
-    this->funcs = (struct PublicTransportFuncPtr*)&specialTaxi_v_table;
+    this->funcs = &publicTransport_v_table;
     printf("SpecialTaxi::Ctor()\n");
 }
 
@@ -282,19 +284,17 @@ void print_info_recieve_Minibus(struct Minibus *m)
     ((struct MinibusFuncPtr *)m->funcs)->wash(m, 3);
 }
 
-struct PublicTransport print_info_recieve_int_ret_PublicTransport(int i)
+void print_info_recieve_int_ret_PublicTransport(struct PublicTransport *this, int i)
 {
     struct Minibus ret;
-    struct PublicTransport publicTransport;
 
     UNUSED(i);
     MinibusCtor(&ret);
     printf("print_info(int i)\n");
     MinibusDisplay(&ret);
-    PublicTransportCCtor(&publicTransport, (struct PublicTransport*)&ret);
+    PublicTransportCCtor(this, (struct PublicTransport*)&ret);
     MinibusDtor(&ret);
 
-    return publicTransport;
 }
 
 void taxi_display(struct Taxi s)
@@ -307,9 +307,21 @@ void operator_delete(void *object_to_remove)
     free(object_to_remove);
 }
 
+void operator_delete_arr(void *arr)
+{
+    operator_delete((size_t*)arr - 1);
+}
+
 void* operator_new(size_t size)
 {
-    return malloc(sizeof(size));
+    return malloc(size);
+}
+
+void *operator_new_arr(size_t arr_size, size_t size_of_element)
+{
+    void *allocated_memory = operator_new(arr_size * size_of_element + sizeof(size_t));
+    *(size_t*)allocated_memory = arr_size;
+    return (size_t*)allocated_memory + 1;
 }
 
 /*------------main-------------*/
@@ -322,7 +334,7 @@ int main(int argc, char **argv, char **envp)
     struct Minibus m205;
     struct Minibus arr3[4];
     struct PublicTransport pub_trans;
-    struct PublicTransport *array[3];
+    struct PublicTransport **array;
     struct PublicTransport arr2[3];
     struct Taxi *taxi1;
     struct Taxi taxi205;
@@ -337,7 +349,7 @@ int main(int argc, char **argv, char **envp)
     print_info_recieve_Minibus(&m);
 
     /*line 194: print_info(3).display(); */ 
-    pub_trans = print_info_recieve_int_ret_PublicTransport(3);
+    print_info_recieve_int_ret_PublicTransport(&pub_trans, 3);
     display(&pub_trans);
     pub_trans.funcs->Dtor(&pub_trans);
 
@@ -349,6 +361,7 @@ int main(int argc, char **argv, char **envp)
     MinibusCtor(m1);
     TaxiCtor(taxi1);
     MinibusCtor(m2);
+    array = operator_new_arr(3, sizeof(struct PublicTransport));
     array[0] = (struct PublicTransport*)m1;
     array[1] = (struct PublicTransport*)taxi1;
     array[2] = (struct PublicTransport*)m2;
@@ -364,6 +377,7 @@ int main(int argc, char **argv, char **envp)
         array[i]->funcs->Dtor(array[i]);
         operator_delete(array[i]);
     }
+    operator_delete_arr(array);
     /* end line 197 */
 
     /*line 205: PublicTransport arr2[] = { Minibus(), Taxi(), PublicTransport() };*/
@@ -400,8 +414,8 @@ int main(int argc, char **argv, char **envp)
     MinibusCtor(&arr3[3]);
 
     /*line 218: axi *arr4 = new Taxi[4]; */
-    arr4 = operator_new(sizeof(struct Taxi) * 4);
-    operator_delete(arr4);
+    arr4 = operator_new_arr(4, sizeof(struct Taxi));
+    operator_delete_arr(arr4);
 
     printf("%d\n",2);
     printf("%d\n",2); /* inline!*/
